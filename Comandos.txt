@@ -1,0 +1,24 @@
+----------------------------------------------------------------------------------------------------------
+
+2). Para instalar y preparar miniconda (Para ROOT):
+
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+
+bash Miniconda3-latest-Linux-x86_64.sh
+
+conda config --add channels conda-forge
+-----------------------------------------------------------------------------------------------------------
+
+3). Para instalar ROOT:
+
+conda install root -y
+-----------------------------------------------------------------------------------------------------------
+
+4). Para crear el ejecutable teniendo en cuenta ROOT y las librerías:
+
+g++ -o fourier_analysis FourierAnalysis.cpp $(root-config --cflags --glibs) -lfftw3
+-----------------------------------------------------------------------------------------------------------
+
+5). Para ejecutar el archivo 
+
+./fourier_analysis Audios graficas.pdf
