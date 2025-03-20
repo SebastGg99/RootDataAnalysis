@@ -1,113 +1,137 @@
 #include <iostream>
 #include <fstream>
-#include <TROOT.h>
-#include <TTree.h>
-#include <TFile.h>
-#include <TH1F.h>
+#include <sstream>
+#include <vector>
 #include <TCanvas.h>
+#include <TH1F.h>
 #include <TGraph.h>
+#include <TApplication.h>
+#include <TFile.h>
 
-void read_taxi_data() {
-    // Crear un TTree
-    TTree *tree = new TTree("taxi_data", "NYC Taxi Data");
+using namespace std;
 
-    // Definir variables que almacenarán los datos
-    Float_t trip_distance, fare_amount, total_amount, trip_duration;
-    Int_t passenger_count, payment_type;
+// Estructura para almacenar los datos de cada viaje
+struct TaxiTrip {
+    int passenger_count;
+    float trip_distance;
+    float fare_amount;
+    float tip_amount;
+    float total_amount;
+    int payment_type;
+};
 
-    // Leer el archivo CSV (se debe eliminar la primera línea del CSV manualmente si contiene encabezados)
-    tree->ReadFile("yellow_tripdata_2018-01_sample.csv",
-                   "trip_distance/F:fare_amount/F:total_amount/F:trip_duration/F:passenger_count/I:payment_type/I",
-                   ',');
+// Función para leer el CSV
+vector<TaxiTrip> readCSV(const string &filename) {
+    vector<TaxiTrip> trips;
+    ifstream file(filename);
+    string line;
+    
+    // Ignorar la primera línea (encabezados)
+    getline(file, line);
 
-    // Asignar ramas a variables
-    tree->SetBranchAddress("trip_distance", &trip_distance);
-    tree->SetBranchAddress("fare_amount", &fare_amount);
-    tree->SetBranchAddress("total_amount", &total_amount);
-    tree->SetBranchAddress("trip_duration", &trip_duration);
-    tree->SetBranchAddress("passenger_count", &passenger_count);
-    tree->SetBranchAddress("payment_type", &payment_type);
-}
+    while (getline(file, line)) {
+        stringstream ss(line);
+        string value;
+        TaxiTrip trip;
 
-tree->Print();  // Muestra la estructura del árbol
-tree->Scan();   // Muestra algunas filas de datos
+        getline(ss, value, ',');  // VendorID (no lo usamos)
+        getline(ss, value, ',');  // pickup_datetime (no lo usamos)
+        getline(ss, value, ',');  // dropoff_datetime (no lo usamos)
 
-void plot_trip_duration() {
-    TCanvas *c1 = new TCanvas("c1", "Distribución de Duración de Viajes", 800, 600);
-    TH1F *h1 = new TH1F("h1", "Distribución de la Duración de Viajes;Duración (minutos);Frecuencia", 50, 0, 120);
+        getline(ss, value, ','); trip.passenger_count = stoi(value);
+        getline(ss, value, ','); trip.trip_distance = stof(value);
+        getline(ss, value, ',');  // RatecodeID (no lo usamos)
+        getline(ss, value, ',');  // store_and_fwd_flag (no lo usamos)
+        getline(ss, value, ',');  // PULocationID (no lo usamos)
+        getline(ss, value, ',');  // DOLocationID (no lo usamos)
 
-    Float_t trip_duration;
-    tree->SetBranchAddress("trip_duration", &trip_duration);
+        getline(ss, value, ','); trip.payment_type = stoi(value);
+        getline(ss, value, ','); trip.fare_amount = stof(value);
+        getline(ss, value, ',');  // extra (no lo usamos)
+        getline(ss, value, ',');  // mta_tax (no lo usamos)
+        getline(ss, value, ','); trip.tip_amount = stof(value);
+        getline(ss, value, ',');  // tolls_amount (no lo usamos)
+        getline(ss, value, ',');  // improvement_surcharge (no lo usamos)
+        getline(ss, value, ','); trip.total_amount = stof(value);
+        getline(ss, value, ',');  // congestion_surcharge (no lo usamos)
 
-    Long64_t nentries = tree->GetEntries();
-    for (Long64_t i = 0; i < nentries; i++) {
-        tree->GetEntry(i);
-        if (trip_duration > 0 && trip_duration <= 120) {
-            h1->Fill(trip_duration);
-        }
+        trips.push_back(trip);
     }
 
-    h1->Draw();
-    c1->SaveAs("trip_duration_hist.pdf");
+    file.close();
+    return trips;
 }
 
-void plot_trip_distance() {
-    TCanvas *c2 = new TCanvas("c2", "Distribución de Distancia de Viajes", 800, 600);
-    TH1F *h2 = new TH1F("h2", "Distribución de la Distancia de Viajes;Distancia (millas);Frecuencia", 50, 0, 50);
+int main(int argc, char **argv) {
+    vector<TaxiTrip> trips = readCSV("primerasFilas.csv");
 
-    Float_t trip_distance;
-    tree->SetBranchAddress("trip_distance", &trip_distance);
+    // Crear un canvas para los histogramas
+    TCanvas *c1 = new TCanvas("c1", "Histograms & Scatter Plots", 1200, 800);
+    c1->Divide(2, 2);
 
-    Long64_t nentries = tree->GetEntries();
-    for (Long64_t i = 0; i < nentries; i++) {
-        tree->GetEntry(i);
-        if (trip_distance > 0 && trip_distance <= 50) {
-            h2->Fill(trip_distance);
-        }
-    }
+    // 1️⃣ Histograma de la cantidad de pasajeros
+    TH1F *hPassenger = new TH1F("hPassenger", "Distribución del número de pasajeros; Número de pasajeros; Frecuencia", 6, 0, 6);
+    
+    // 2️⃣ Histograma de distancias de viaje
+    TH1F *hDistance = new TH1F("hDistance", "Distribución de distancia de viaje; Distancia (millas); Frecuencia", 50, 0, 20);
+    
+    // 3️⃣ Histograma de propinas
+    TH1F *hTips = new TH1F("hTips", "Distribución de propinas; Propina (USD); Frecuencia", 50, 0, 10);
 
-    h2->Draw();
-    c2->SaveAs("trip_distance_hist.pdf");
-}
+    // Gráficos de dispersión para correlaciones
+    TGraph *gFareVsDistance = new TGraph();
+    TGraph *gTipVsFare = new TGraph();
+    TGraph *gTotalVsDistance = new TGraph();
 
-void plot_distance_vs_duration() {
-    TCanvas *c3 = new TCanvas("c3", "Distancia vs Duración", 800, 600);
-    TGraph *graph = new TGraph();
-
-    Float_t trip_distance, trip_duration;
-    tree->SetBranchAddress("trip_distance", &trip_distance);
-    tree->SetBranchAddress("trip_duration", &trip_duration);
-
-    Long64_t nentries = tree->GetEntries();
     int index = 0;
-    for (Long64_t i = 0; i < nentries; i++) {
-        tree->GetEntry(i);
-        if (trip_distance > 0 && trip_duration > 0) {
-            graph->SetPoint(index++, trip_distance, trip_duration);
-        }
+    for (const auto &trip : trips) {
+        hPassenger->Fill(trip.passenger_count);
+        hDistance->Fill(trip.trip_distance);
+        hTips->Fill(trip.tip_amount);
+
+        gFareVsDistance->SetPoint(index, trip.trip_distance, trip.fare_amount);
+        gTipVsFare->SetPoint(index, trip.fare_amount, trip.tip_amount);
+        gTotalVsDistance->SetPoint(index, trip.trip_distance, trip.total_amount);
+        index++;
     }
 
-    graph->SetTitle("Distancia vs Duración de Viajes;Distancia (millas);Duración (minutos)");
-    graph->Draw("AP");
-    c3->SaveAs("distance_vs_duration.pdf");
-}
-void plot_fare_by_payment() {
-    TCanvas *c4 = new TCanvas("c4", "Tarifas por Tipo de Pago", 800, 600);
-    TH1F *h3 = new TH1F("h3", "Distribución de Tarifas por Tipo de Pago;Tipo de Pago;Frecuencia", 6, 0, 6);
+    // Abrir un archivo PDF para guardar todas las gráficas
+    c1->Print("resultados.pdf("); // Abre el PDF en modo multipágina
 
-    Int_t payment_type;
-    Float_t total_amount;
-    tree->SetBranchAddress("payment_type", &payment_type);
-    tree->SetBranchAddress("total_amount", &total_amount);
+    // Dibujar y guardar histogramas
+    c1->cd(1);
+    hPassenger->Draw();
+    c1->Print("resultados.pdf"); 
 
-    Long64_t nentries = tree->GetEntries();
-    for (Long64_t i = 0; i < nentries; i++) {
-        tree->GetEntry(i);
-        if (total_amount > 0) {
-            h3->Fill(payment_type, total_amount);
-        }
-    }
+    c1->cd(2);
+    hDistance->Draw();
+    c1->Print("resultados.pdf"); 
 
-    h3->Draw();
-    c4->SaveAs("fare_by_payment.pdf");
+    c1->cd(3);
+    hTips->Draw();
+    c1->Print("resultados.pdf"); 
+
+    // Crear un nuevo canvas para los gráficos de dispersión
+    TCanvas *c2 = new TCanvas("c2", "Correlations", 1200, 800);
+    c2->Divide(2, 2);
+
+    c2->cd(1);
+    gFareVsDistance->SetTitle("Tarifa vs Distancia; Distancia (millas); Tarifa (USD)");
+    gFareVsDistance->SetMarkerStyle(7);
+    gFareVsDistance->Draw("AP");
+    c2->Print("resultados.pdf"); 
+
+    c2->cd(2);
+    gTipVsFare->SetTitle("Propina vs Tarifa; Tarifa (USD); Propina (USD)");
+    gTipVsFare->SetMarkerStyle(7);
+    gTipVsFare->Draw("AP");
+    c2->Print("resultados.pdf"); 
+
+    c2->cd(3);
+    gTotalVsDistance->SetTitle("Total vs Distancia; Distancia (millas); Total (USD)");
+    gTotalVsDistance->SetMarkerStyle(7);
+    gTotalVsDistance->Draw("AP");
+    c2->Print("resultados.pdf)"); // Cierra el PDF
+
+    return 0;
 }
