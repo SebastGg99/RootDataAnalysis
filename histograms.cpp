@@ -123,7 +123,7 @@ void grapher(vector<TaxiTrip> trips) {
 }
 
 // Función principal del programa
-int main(int argc, char **argv) {
+int main() {
     
     vector<TaxiTrip> trips = readCSV("primerasFilas.csv"); // Cargamos los datos desde el archivo CSV
     grapher(trips); // Generamos los gráficos con los datos procesados
